@@ -576,18 +576,14 @@ public class ScannerView extends ShapeDetectionController {
                         @Override
                         public void onAutoFocus(boolean success, Camera camera) {
                             Log.d(TAG, "onAutoFocusSuccess: " + success);
-                            if (success) {
-                                takePicture();
-                            } else {
-                                onPictureFailed();
-                            }
+                            takePicture();
                         }
                     });
                 } else {
                     takePicture();
                 }
             } catch (Exception e) {
-                onPictureFailed();
+                takePicture();
             }
         }
     }
