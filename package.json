@@ -1,6 +1,6 @@
 {
   "name": "@28harishkumar/react-native-scanner",
-  "version": "3.0.1",
+  "version": "3.0.2",
   "description": "Scan documents, automatic border detection",
   "main": "src/index.tsx",
   "files": [
@@ -37,14 +37,14 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/Woonivers/react-native-document-scanner"
+    "url": "https://github.com/VictorAugustoDn/react-native-document-scanner/"
   },
   "author": "Woonivers (https://woonivers.com)",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/Woonivers/react-native-document-scanner/issues"
+    "url": "https://github.com/VictorAugustoDn/react-native-document-scanner/issues"
   },
-  "homepage": "https://github.com/Woonivers/react-native-document-scanner#readme",
+  "homepage": "https://github.com/VictorAugustoDn/react-native-document-scanner/#readme",
   "devDependencies": {
     "@babel/runtime": "^7.5.5",
     "@commitlint/config-conventional": "^8.0.0",
