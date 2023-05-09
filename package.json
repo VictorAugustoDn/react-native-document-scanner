@@ -1,6 +1,6 @@
 {
-  "name": "@28harishkumar/react-native-scanner",
-  "version": "3.0.2",
+  "name": "react-native-document-scanner",
+  "version": "3.0.3",
   "description": "Scan documents, automatic border detection",
   "main": "src/index.tsx",
   "files": [
