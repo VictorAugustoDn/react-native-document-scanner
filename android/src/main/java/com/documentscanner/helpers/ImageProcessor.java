@@ -12,15 +12,22 @@ import android.os.Message;
 import android.preference.PreferenceManager;
 import android.util.Log;
 import android.os.Bundle;
-import android.view.Surface;
+
 import com.facebook.react.bridge.Arguments;
 
 import com.documentscanner.views.ScannerView;
-import com.documentscanner.helpers.PreviewFrame;
-import com.documentscanner.helpers.Quadrilateral;
-import com.documentscanner.helpers.ScannedDocument;
-import com.documentscanner.helpers.Utils;
 import com.documentscanner.views.HUDCanvasView;
+import com.google.zxing.BinaryBitmap;
+import com.google.zxing.ChecksumException;
+import com.google.zxing.DecodeHintType;
+import com.google.zxing.FormatException;
+import com.google.zxing.LuminanceSource;
+import com.google.zxing.NotFoundException;
+import com.google.zxing.RGBLuminanceSource;
+import com.google.zxing.Reader;
+import com.google.zxing.Result;
+import com.google.zxing.common.HybridBinarizer;
+import com.google.zxing.oned.ITFReader;
 
 import org.opencv.core.Core;
 import org.opencv.core.CvType;
@@ -37,7 +44,9 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.Date;
+import java.util.EnumMap;
 import java.util.HashMap;
+import java.util.Map;
 
 public class ImageProcessor extends Handler {
     private static final String TAG = "ImageProcessor";
@@ -51,6 +60,10 @@ public class ImageProcessor extends Handler {
     private int numOfRectangles = 10;
     private double lastCaptureTime = 0;
     private double durationBetweenCaptures = 0;
+    private String currentBarcode = null;
+    private String currentBarcodeWest = null;
+    private int numOfBarcodes = 0;
+    private String rotate = null;
 
     public ImageProcessor(Looper looper, ScannerView mainActivity, Context context) {
         super(looper);
@@ -93,20 +106,109 @@ public class ImageProcessor extends Handler {
         }
     }
 
+    private void decodeBarcode(Mat frame, String region) {
+        try {
+            int w = frame.width();
+            int h = frame.height();
+            frame = frame.submat(0, h / 4, w / 2 + h / 4, w);
+
+            Bitmap bMap = Bitmap.createBitmap(frame.width(), frame.height(), Bitmap.Config.ARGB_8888);
+            org.opencv.android.Utils.matToBitmap(frame, bMap);
+            //frame.release();
+            int[] intArray = new int[bMap.getWidth()*bMap.getHeight()];
+            //copy pixel data from the Bitmap into the 'intArray' array
+            bMap.getPixels(intArray, 0, bMap.getWidth(), 0, 0, bMap.getWidth(), bMap.getHeight());
+
+            LuminanceSource source = new RGBLuminanceSource(bMap.getWidth(), bMap.getHeight(),intArray);
+
+            BinaryBitmap bBitmap = new BinaryBitmap(new HybridBinarizer(source));
+
+            Reader reader = new ITFReader();
+            Map<DecodeHintType, Object> hints = new EnumMap<>(DecodeHintType.class);
+            hints.put(DecodeHintType.TRY_HARDER, Boolean.TRUE);
+            Result barcode = reader.decode(bBitmap, hints);
+            Log.d("BARCODE", "Barcode: " + barcode.getText());
+            if(!barcode.getText().isEmpty()) {
+                currentBarcode = barcode.getText();
+                numOfBarcodes++;
+                if(region == "northEast") {
+                    rotate = "northEast";
+                } else {
+                    rotate = "southWest";
+                }
+            } else {
+                numOfBarcodes = 0;
+            }
+        } catch (Exception e) {
+            currentBarcode = null;
+            numOfBarcodes = 0;
+        }
+    }
+
+    private void decodeBarcodeWest(Mat frame, String region) {
+        try {
+            int w = frame.width();
+            int h = frame.height();
+            frame = frame.submat(0, h / 4, w / 2 + h / 4, w);
+
+            Bitmap bMap = Bitmap.createBitmap(frame.width(), frame.height(), Bitmap.Config.ARGB_8888);
+            org.opencv.android.Utils.matToBitmap(frame, bMap);
+            int[] intArray = new int[bMap.getWidth()*bMap.getHeight()];
+            //copy pixel data from the Bitmap into the 'intArray' array
+            bMap.getPixels(intArray, 0, bMap.getWidth(), 0, 0, bMap.getWidth(), bMap.getHeight());
+
+            LuminanceSource source = new RGBLuminanceSource(bMap.getWidth(), bMap.getHeight(),intArray);
+
+            BinaryBitmap bBitmap = new BinaryBitmap(new HybridBinarizer(source));
+
+            Reader reader = new ITFReader();
+            Map<DecodeHintType, Object> hints = new EnumMap<>(DecodeHintType.class);
+            hints.put(DecodeHintType.TRY_HARDER, Boolean.TRUE);
+            Result barcode = reader.decode(bBitmap, hints);
+            Log.d("BARCODE", "Barcode: " + barcode.getText());
+            if(!barcode.getText().isEmpty()) {
+                currentBarcodeWest = barcode.getText();
+                numOfBarcodes++;
+                if(region == "northEast") {
+                    rotate = "northEast";
+                } else {
+                    rotate = "southWest";
+                }
+            } else {
+                numOfBarcodes = 0;
+            }
+        } catch (Exception e) {
+            currentBarcodeWest = null;
+            numOfBarcodes = 0;
+        }
+    }
+
     private void processPreviewFrame(PreviewFrame previewFrame) {
         Mat frame = previewFrame.getFrame();
         boolean focused = mMainActivity.isFocused();
 
         if (detectRectangleInFrame(frame) && focused) {
-            numOfSquares++;
-            double now = (double)(new Date()).getTime() / 1000.0;
-            if (numOfSquares == numOfRectangles && now > lastCaptureTime + durationBetweenCaptures) {
-                lastCaptureTime = now;
-                numOfSquares = 0;
-                mMainActivity.requestPicture();
+            try {
+                Mat northEast = detectDocumentDoc(frame);
+                decodeBarcode(northEast, "northEast");
+                if(currentBarcode == null) {
+                    Mat southWest = northEast.clone();
+                    Core.flip(southWest, southWest, 1);
+                    Core.flip(southWest, southWest, 0);
+                    decodeBarcodeWest(southWest, "southWest");
+                }
+                //numOfSquares++;
+                double now = (double)(new Date()).getTime() / 1000.0;
+                if (numOfBarcodes == numOfRectangles && now > lastCaptureTime + durationBetweenCaptures && currentBarcode != null || currentBarcodeWest != null) {
+                    lastCaptureTime = now;
+                    numOfBarcodes = 0;
+                    mMainActivity.requestPicture();
+                }
+            } catch (Exception ignored){
+                Log.d("BARCODE", String.valueOf(ignored));
             }
         } else {
-            numOfSquares = 0;
+            numOfBarcodes = 0;
         }
 
         frame.release();
@@ -127,9 +229,10 @@ public class ImageProcessor extends Handler {
         ScannedDocument doc = detectDocument(img);
         mMainActivity.getHUD().clear();
         mMainActivity.invalidateHUD();
-        mMainActivity.saveDocument(doc);
+        mMainActivity.saveDocument(doc, currentBarcode != null ? currentBarcode : currentBarcodeWest, rotate);
         doc.release();
         picture.release();
+        currentBarcode = null;
 
         mMainActivity.setImageProcessorBusy(false);
         mMainActivity.waitSpinnerInvisible();
@@ -181,6 +284,54 @@ public class ImageProcessor extends Handler {
         }
         enhanceDocument(doc);
         return sd.setProcessed(doc);
+    }
+
+    private Mat detectDocumentDoc(Mat inputRgba) {
+        ScannedDocument sd = new ScannedDocument(inputRgba);
+        ArrayList<MatOfPoint> contours = findContours(inputRgba);
+
+        sd.originalSize = inputRgba.size();
+        Quadrilateral quad = getQuadrilateral(contours, sd.originalSize);
+
+        double ratio = sd.originalSize.height / 500;
+        sd.heightWithRatio = Double.valueOf(sd.originalSize.width / ratio).intValue();
+        sd.widthWithRatio = Double.valueOf(sd.originalSize.height / ratio).intValue();
+
+        Mat doc;
+        if (quad != null) {
+            sd.originalPoints = new Point[4];
+
+            // TopLeft
+            sd.originalPoints[0] = new Point(
+                    (sd.widthWithRatio - quad.points[3].y),
+                    quad.points[3].x);
+
+            // TopRight
+            sd.originalPoints[1] = new Point(
+                    (sd.widthWithRatio - quad.points[0].y),
+                    quad.points[0].x);
+
+            // BottomRight
+            sd.originalPoints[2] = new Point(
+                    (sd.widthWithRatio - quad.points[1].y),
+                    quad.points[1].x);
+
+            // BottomLeft
+            sd.originalPoints[3] = new Point(
+                    (sd.widthWithRatio - quad.points[2].y),
+                    quad.points[2].x);
+
+            sd.quadrilateral = quad;
+            sd.previewPoints = mPreviewPoints;
+            sd.previewSize = mPreviewSize;
+
+            doc = fourPointTransform(inputRgba, quad.points);
+        } else {
+            doc = new Mat(inputRgba.size(), CvType.CV_8UC4);
+            inputRgba.copyTo(doc);
+        }
+        enhanceDocument(doc);
+        return doc;
     }
 
     private final HashMap<String, Long> pageHistory = new HashMap<>();
