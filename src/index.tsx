@@ -76,7 +76,7 @@ interface ScannerProps {
   onRectangleDetect?: (event: any) => void;
   onProcessing?: () => void;
   onPictureProcessed?: (args: PictureCallbackProps) => void;
-  onPictureTaken?: (args: PictureTaken) => void;
+  onPictureTaken?: (event: any) => void;
   onDeviceSetup?: (args: DeviceSetupCallbackProps) => void;
   onRectangleDetected?: (args: { detectedRectangle: DetectedRectangle }) => void;
   onTorchChanged?: (args: TorchCallbackProps) => void;
