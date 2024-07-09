@@ -1,6 +1,6 @@
 {
   "name": "react-native-document-scanner",
-  "version": "3.0.4",
+  "version": "3.0.5",
   "description": "Scan documents, automatic border detection",
   "main": "src/index.tsx",
   "files": [
