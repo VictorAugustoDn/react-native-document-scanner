@@ -9,9 +9,6 @@ import {
   ViewStyle,
 } from 'react-native';
 
-
-// TODO: responses are required as mentioned in this file
-
 const Scanner = requireNativeComponent('RNScanner');
 const ScannerManager: any = NativeModules.RNScannerManager;
 
@@ -116,22 +113,22 @@ interface ScannerProps {
 class ScannerComponent extends React.Component<ScannerProps> {
   private onPictureTakenListener?: EmitterSubscription;
   private onProcessingListener?: EmitterSubscription;
-  
-  sendOnPictureTakenEvent (event: any) {
-    if (!this.props.onPictureTaken) return null
-    return this.props.onPictureTaken(event.nativeEvent)
+
+  sendOnPictureTakenEvent(event: any) {
+    if (!this.props.onPictureTaken) return null;
+    return this.props.onPictureTaken(event.nativeEvent);
   }
 
-  sendOnRectangleDetectEvent (event: any) {
-    if (!this.props.onRectangleDetect) return null
-    return this.props.onRectangleDetect(event.nativeEvent)
+  sendOnRectangleDetectEvent(event: any) {
+    if (!this.props.onRectangleDetect) return null;
+    return this.props.onRectangleDetect(event.nativeEvent);
   }
 
-  getImageQuality () {
-    if (!this.props.quality) return 0.8
-    if (this.props.quality > 1) return 1
-    if (this.props.quality < 0.1) return 0.1
-    return this.props.quality
+  getImageQuality() {
+    if (!this.props.quality) return 0.8;
+    if (this.props.quality > 1) return 1;
+    if (this.props.quality < 0.1) return 0.1;
+    return this.props.quality;
   }
 
   componentDidMount() {
@@ -178,25 +175,25 @@ class ScannerComponent extends React.Component<ScannerProps> {
     }
   }
 
-  capture () {
+  capture() {
     if (this._scannerHandle) {
-      ScannerManager.capture()
+      ScannerManager.capture();
     }
   }
 
-  _scannerRef: any = null;
-  _scannerHandle: number | null = null;
-  _setReference = (ref: any) => {
+  private _scannerRef: any = null;
+  private _scannerHandle: number | null = null;
+  private _setReference = (ref: any) => {
     if (ref) {
-      this._scannerRef = ref
-      this._scannerHandle = findNodeHandle(ref)
+      this._scannerRef = ref;
+      this._scannerHandle = findNodeHandle(ref);
     } else {
-      this._scannerRef = null
-      this._scannerHandle = null
+      this._scannerRef = null;
+      this._scannerHandle = null;
     }
   };
 
-  render () {
+  render() {
     return (
       <Scanner
         ref={this._setReference}
@@ -212,7 +209,7 @@ class ScannerComponent extends React.Component<ScannerProps> {
         durationBetweenCaptures={this.props.durationBetweenCaptures || 0}
         detectionRefreshRateInMS={this.props.detectionRefreshRateInMS || 50}
       />
-    )
+    );
   }
 }
 
