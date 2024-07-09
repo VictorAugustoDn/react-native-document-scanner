@@ -104,15 +104,5 @@
       "<rootDir>/lib/"
     ]
   },
-  "@react-native-community/bob": {
-    "source": "src",
-    "output": "lib",
-    "targets": [
-      "module",
-      "typescript"
-    ],
-    "files": [
-      "src/"
-    ]
-  }
+  "bob": "bob.config.js"
 }
