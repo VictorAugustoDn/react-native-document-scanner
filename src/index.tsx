@@ -1,6 +1,7 @@
 import React from 'react';
 import {
   DeviceEventEmitter,
+  EmitterSubscription,
   findNodeHandle,
   NativeModules,
   Platform,
@@ -113,6 +114,9 @@ interface ScannerProps {
 }
 
 class ScannerComponent extends React.Component<ScannerProps> {
+  private onPictureTakenListener?: EmitterSubscription;
+  private onProcessingListener?: EmitterSubscription;
+  
   sendOnPictureTakenEvent (event: any) {
     if (!this.props.onPictureTaken) return null
     return this.props.onPictureTaken(event.nativeEvent)
@@ -130,36 +134,47 @@ class ScannerComponent extends React.Component<ScannerProps> {
     return this.props.quality
   }
 
-  componentDidMount () {
+  componentDidMount() {
     if (Platform.OS === 'android') {
-      const { onPictureTaken, onProcessing } = this.props
-      if (onPictureTaken) DeviceEventEmitter.addListener('onPictureTaken', onPictureTaken)
-      if (onProcessing) DeviceEventEmitter.addListener('onProcessingChange', onProcessing)
+      const { onPictureTaken, onProcessing } = this.props;
+      if (onPictureTaken) {
+        this.onPictureTakenListener = DeviceEventEmitter.addListener('onPictureTaken', onPictureTaken);
+      }
+      if (onProcessing) {
+        this.onProcessingListener = DeviceEventEmitter.addListener('onProcessingChange', onProcessing);
+      }
     }
   }
 
   componentDidUpdate(prevProps: ScannerProps) {
     if (Platform.OS === 'android') {
       if (this.props.onPictureTaken !== prevProps.onPictureTaken) {
-        if (prevProps.onPictureTaken)
-          DeviceEventEmitter.removeListener('onPictureTaken', prevProps.onPictureTaken)
-        if (this.props.onPictureTaken)
-          DeviceEventEmitter.addListener('onPictureTaken', this.props.onPictureTaken)
+        if (prevProps.onPictureTaken) {
+          this.onPictureTakenListener?.remove();
+        }
+        if (this.props.onPictureTaken) {
+          this.onPictureTakenListener = DeviceEventEmitter.addListener('onPictureTaken', this.props.onPictureTaken);
+        }
       }
       if (this.props.onProcessing !== prevProps.onProcessing) {
-        if (prevProps.onProcessing)
-          DeviceEventEmitter.removeListener('onProcessingChange', prevProps.onProcessing)
-        if (this.props.onProcessing)
-          DeviceEventEmitter.addListener('onProcessingChange', this.props.onProcessing)
+        if (prevProps.onProcessing) {
+          this.onProcessingListener?.remove();
+        }
+        if (this.props.onProcessing) {
+          this.onProcessingListener = DeviceEventEmitter.addListener('onProcessingChange', this.props.onProcessing);
+        }
       }
     }
   }
 
-  componentWillUnmount () {
+  componentWillUnmount() {
     if (Platform.OS === 'android') {
-      const { onPictureTaken, onProcessing } = this.props
-      if (onPictureTaken) DeviceEventEmitter.removeListener('onPictureTaken', onPictureTaken)
-      if (onProcessing) DeviceEventEmitter.removeListener('onProcessingChange', onProcessing)
+      if (this.onPictureTakenListener) {
+        this.onPictureTakenListener.remove();
+      }
+      if (this.onProcessingListener) {
+        this.onProcessingListener.remove();
+      }
     }
   }
 
