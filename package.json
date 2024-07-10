@@ -1,6 +1,6 @@
 {
   "name": "react-native-document-scanner",
-  "version": "3.0.7",
+  "version": "3.0.8",
   "description": "Scan documents, automatic border detection",
   "main": "src/index.tsx",
   "files": [
@@ -72,9 +72,9 @@
     "jest": "^24.8.0",
     "lint-staged": "^9.2.1",
     "prettier": "^1.18.2",
-    "react": "18.2.0",
-    "react-dom": "18.2.0",
-    "react-native": "~0.72.0",
+    "react": "16.8.3",
+    "react-dom": "16.8.3",
+    "react-native": "~0.59.8",
     "release-it": "^12.3.0",
     "typescript": "^3.5.2",
     "semantic-release": "^15.13.24"
