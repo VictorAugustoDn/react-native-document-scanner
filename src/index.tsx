@@ -10,10 +10,9 @@ import {
 } from 'react-native';
 
 // Definição do componente nativo
-const Scanner = requireNativeComponent('RNScanner');
+const Scanner = requireNativeComponent<ScannerProps>('RNScanner');
 const ScannerManager: any = NativeModules.RNScannerManager;
 
-// Definição das interfaces
 export interface PictureCallbackProps {
   croppedImage: string;
   initialImage: string;
@@ -116,19 +115,16 @@ class ScannerComponent extends React.Component<ScannerProps> {
   private onPictureTaken: EmitterSubscription | undefined;
   private onProcessingChange: EmitterSubscription | undefined;
 
-  // Função para enviar o evento de imagem capturada
   sendOnPictureTakenEvent(event: any) {
     if (!this.props.onPictureTaken) return null;
     return this.props.onPictureTaken(event.nativeEvent);
   }
 
-  // Função para enviar o evento de detecção de retângulo
   sendOnRectangleDetectEvent(event: any) {
     if (!this.props.onRectangleDetect) return null;
     return this.props.onRectangleDetect(event.nativeEvent);
   }
 
-  // Função para obter a qualidade da imagem
   getImageQuality() {
     if (!this.props.quality) return 0.8;
     if (this.props.quality > 1) return 1;
@@ -136,7 +132,6 @@ class ScannerComponent extends React.Component<ScannerProps> {
     return this.props.quality;
   }
 
-  // Função de montagem do componente
   componentDidMount() {
     if (Platform.OS === 'android') {
       const { onPictureTaken, onProcessing } = this.props;
@@ -149,7 +144,6 @@ class ScannerComponent extends React.Component<ScannerProps> {
     }
   }
 
-  // Função de atualização do componente
   componentDidUpdate(prevProps: ScannerProps) {
     if (Platform.OS === 'android') {
       if (this.props.onPictureTaken !== prevProps.onPictureTaken) {
@@ -177,16 +171,14 @@ class ScannerComponent extends React.Component<ScannerProps> {
     }
   }
 
-  // Função de desmontagem do componente
   componentWillUnmount() {
     if (Platform.OS === 'android') {
       const { onPictureTaken, onProcessing } = this.props;
-      if (onPictureTaken) this.onPictureTaken && this.onPictureTaken.remove(); // DeviceEventEmitter.removeListener("onPictureTaken", onPictureTaken)
-      if (onProcessing) this.onProcessingChange && this.onProcessingChange.remove(); // DeviceEventEmitter.removeListener("onProcessingChange", onProcessing)
+      if (onPictureTaken) this.onPictureTaken && this.onPictureTaken.remove();
+      if (onProcessing) this.onProcessingChange && this.onProcessingChange.remove();
     }
   }
 
-  // Função de captura
   capture() {
     if (this._scannerHandle) {
       ScannerManager.capture();
