@@ -9,34 +9,33 @@ import {
   ViewStyle,
 } from 'react-native';
 
-
-// TODO: responses are required as mentioned in this file
-
+// Definição do componente nativo
 const Scanner = requireNativeComponent('RNScanner');
 const ScannerManager: any = NativeModules.RNScannerManager;
 
+// Definição das interfaces
 export interface PictureCallbackProps {
-  croppedImage: string,
-  initialImage: string,
+  croppedImage: string;
+  initialImage: string;
 }
 
 export interface Coordinate {
-  x: number,
-  y: number,
+  x: number;
+  y: number;
 }
 
 export interface RectangleProps {
-  bottomLeft: Coordinate,
-  bottomRight: Coordinate,
-  topLeft: Coordinate,
-  topRight: Coordinate,
+  bottomLeft: Coordinate;
+  bottomRight: Coordinate;
+  topLeft: Coordinate;
+  topRight: Coordinate;
 }
 
 export interface DetectedRectangle extends RectangleProps {
   dimensions: {
-    height: number,
-    width: number,
-  }
+    height: number;
+    width: number;
+  };
 }
 
 export interface PictureTaken {
@@ -47,27 +46,27 @@ export interface PictureTaken {
 }
 
 export interface DeviceSetupCallbackProps {
-  hasCamera: boolean,
-  permissionToUseCamera: boolean,
-  flashIsAvailable: boolean,
-  previewHeightPercent: number,
-  previewWidthPercent: number,
+  hasCamera: boolean;
+  permissionToUseCamera: boolean;
+  flashIsAvailable: boolean;
+  previewHeightPercent: number;
+  previewWidthPercent: number;
 }
 
 export interface TorchCallbackProps {
-  enabled: boolean
+  enabled: boolean;
 }
 
 export interface Filter {
-  id: number,
-  name: string
+  id: number;
+  name: string;
 }
 
 export interface AndroidPermissionObject {
-  title: string,
-  message: string,
-  buttonNegative: string,
-  buttonPositive: string,
+  title: string;
+  message: string;
+  buttonNegative: string;
+  buttonPositive: string;
 }
 
 interface ScannerProps {
@@ -85,7 +84,7 @@ interface ScannerProps {
   onTorchChanged?: (args: TorchCallbackProps) => void;
   onErrorProcessingImage?: (args: PictureCallbackProps) => void;
   filterId?: number;
-  capturedQuality?: number,
+  capturedQuality?: number;
   styles?: object;
   androidPermission?: AndroidPermissionObject | boolean;
   quality?: number;
@@ -114,71 +113,83 @@ interface ScannerProps {
 }
 
 class ScannerComponent extends React.Component<ScannerProps> {
-  private onPictureTaken: EmitterSubscription | undefined
-  private onProcessingChange: EmitterSubscription | undefined
-  sendOnPictureTakenEvent (event: any) {
-    if (!this.props.onPictureTaken) return null
-    return this.props.onPictureTaken(event.nativeEvent)
+  private onPictureTaken: EmitterSubscription | undefined;
+  private onProcessingChange: EmitterSubscription | undefined;
+
+  // Função para enviar o evento de imagem capturada
+  sendOnPictureTakenEvent(event: any) {
+    if (!this.props.onPictureTaken) return null;
+    return this.props.onPictureTaken(event.nativeEvent);
   }
 
-  sendOnRectangleDetectEvent (event: any) {
-    if (!this.props.onRectangleDetect) return null
-    return this.props.onRectangleDetect(event.nativeEvent)
+  // Função para enviar o evento de detecção de retângulo
+  sendOnRectangleDetectEvent(event: any) {
+    if (!this.props.onRectangleDetect) return null;
+    return this.props.onRectangleDetect(event.nativeEvent);
   }
 
-  getImageQuality () {
-    if (!this.props.quality) return 0.8
-    if (this.props.quality > 1) return 1
-    if (this.props.quality < 0.1) return 0.1
-    return this.props.quality
+  // Função para obter a qualidade da imagem
+  getImageQuality() {
+    if (!this.props.quality) return 0.8;
+    if (this.props.quality > 1) return 1;
+    if (this.props.quality < 0.1) return 0.1;
+    return this.props.quality;
   }
 
-  componentDidMount () {
+  // Função de montagem do componente
+  componentDidMount() {
     if (Platform.OS === 'android') {
-      const { onPictureTaken, onProcessing } = this.props
-      if (onPictureTaken) { this.onPictureTaken = DeviceEventEmitter.addListener('onPictureTaken', onPictureTaken) }
-      if (onProcessing) { this.onProcessingChange = DeviceEventEmitter.addListener('onProcessingChange', onProcessing) }
+      const { onPictureTaken, onProcessing } = this.props;
+      if (onPictureTaken) {
+        this.onPictureTaken = DeviceEventEmitter.addListener('onPictureTaken', onPictureTaken);
+      }
+      if (onProcessing) {
+        this.onProcessingChange = DeviceEventEmitter.addListener('onProcessingChange', onProcessing);
+      }
     }
   }
 
+  // Função de atualização do componente
   componentDidUpdate(prevProps: ScannerProps) {
     if (Platform.OS === 'android') {
       if (this.props.onPictureTaken !== prevProps.onPictureTaken) {
         if (prevProps.onPictureTaken) {
-          this.onPictureTaken && this.onPictureTaken.remove()
+          this.onPictureTaken && this.onPictureTaken.remove();
         }
         if (this.props.onPictureTaken) {
           this.onPictureTaken = DeviceEventEmitter.addListener(
             'onPictureTaken',
             this.props.onPictureTaken
-          )
+          );
         }
       }
       if (this.props.onProcessing !== prevProps.onProcessing) {
         if (prevProps.onProcessing) {
-          this.onProcessingChange && this.onProcessingChange.remove()
+          this.onProcessingChange && this.onProcessingChange.remove();
         }
         if (this.props.onProcessing) {
           this.onProcessingChange = DeviceEventEmitter.addListener(
             'onProcessingChange',
             this.props.onProcessing
-          )
+          );
         }
       }
     }
   }
 
-  componentWillUnmount () {
+  // Função de desmontagem do componente
+  componentWillUnmount() {
     if (Platform.OS === 'android') {
-      const { onPictureTaken, onProcessing } = this.props
-      if (onPictureTaken) this.onPictureTaken && this.onPictureTaken.remove() // DeviceEventEmitter.removeListener("onPictureTaken", onPictureTaken)
-      if (onProcessing) this.onProcessingChange && this.onProcessingChange.remove() // DeviceEventEmitter.removeListener("onProcessingChange", onProcessing)
+      const { onPictureTaken, onProcessing } = this.props;
+      if (onPictureTaken) this.onPictureTaken && this.onPictureTaken.remove(); // DeviceEventEmitter.removeListener("onPictureTaken", onPictureTaken)
+      if (onProcessing) this.onProcessingChange && this.onProcessingChange.remove(); // DeviceEventEmitter.removeListener("onProcessingChange", onProcessing)
     }
   }
 
-  capture () {
+  // Função de captura
+  capture() {
     if (this._scannerHandle) {
-      ScannerManager.capture()
+      ScannerManager.capture();
     }
   }
 
@@ -186,15 +197,15 @@ class ScannerComponent extends React.Component<ScannerProps> {
   _scannerHandle: number | null = null;
   _setReference = (ref: any) => {
     if (ref) {
-      this._scannerRef = ref
-      this._scannerHandle = findNodeHandle(ref)
+      this._scannerRef = ref;
+      this._scannerHandle = findNodeHandle(ref);
     } else {
-      this._scannerRef = null
-      this._scannerHandle = null
+      this._scannerRef = null;
+      this._scannerHandle = null;
     }
   };
 
-  render () {
+  render() {
     return (
       <Scanner
         ref={this._setReference}
@@ -210,7 +221,7 @@ class ScannerComponent extends React.Component<ScannerProps> {
         durationBetweenCaptures={this.props.durationBetweenCaptures || 0}
         detectionRefreshRateInMS={this.props.detectionRefreshRateInMS || 50}
       />
-    )
+    );
   }
 }
 
