@@ -1,5 +1,6 @@
 package com.documentscanner.helpers;
 
+import android.app.ActivityManager;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.graphics.Bitmap;
@@ -18,11 +19,8 @@ import com.facebook.react.bridge.Arguments;
 import com.documentscanner.views.ScannerView;
 import com.documentscanner.views.HUDCanvasView;
 import com.google.zxing.BinaryBitmap;
-import com.google.zxing.ChecksumException;
 import com.google.zxing.DecodeHintType;
-import com.google.zxing.FormatException;
 import com.google.zxing.LuminanceSource;
-import com.google.zxing.NotFoundException;
 import com.google.zxing.RGBLuminanceSource;
 import com.google.zxing.Reader;
 import com.google.zxing.Result;
@@ -64,10 +62,26 @@ public class ImageProcessor extends Handler {
     private String currentBarcodeWest = null;
     private int numOfBarcodes = 0;
     private String rotate = null;
+    private final Context mContext;
+
+    // Constantes da classe
+    private static final int MIN_FRAMES_STABLE_HIGH_END = 10;
+    private static final int MIN_FRAMES_STABLE_LOW_END = 5;
+    private static final long MIN_INTERVAL_HIGH_END = 50;
+    private static final long MIN_INTERVAL_LOW_END = 200;
+    private static final int PERFORMANCE_CHECK_INTERVAL = 100;
+
+    // Variáveis de instância
+    private int stableFramesCount = 0;
+    private int framesProcessed = 0;
+    private long lastProcessingTime = 0;
+    private long startTime = 0;
+    private boolean isHighEndDevice = false;
 
     public ImageProcessor(Looper looper, ScannerView mainActivity, Context context) {
         super(looper);
         this.mMainActivity = mainActivity;
+        this.mContext = context;
         SharedPreferences sharedPref = PreferenceManager.getDefaultSharedPreferences(context);
         mBugRotate = sharedPref.getBoolean("bug_rotate", false);
     }
@@ -88,15 +102,12 @@ public class ImageProcessor extends Handler {
         this.colorGain = contrast;
     }
 
-
     public void handleMessage(Message msg) {
         if (msg.obj.getClass() == ImageProcessorMessage.class) {
-
             ImageProcessorMessage obj = (ImageProcessorMessage) msg.obj;
             String command = obj.getCommand();
 
             Log.d(TAG, "Message Received: " + command + " - " + obj.getObj().toString());
-            // TODO: Manage command.equals("colorMode" || "filterMode"), return boolean
 
             if (command.equals("previewFrame")) {
                 processPreviewFrame((PreviewFrame) obj.getObj());
@@ -106,113 +117,158 @@ public class ImageProcessor extends Handler {
         }
     }
 
-    private void decodeBarcode(Mat frame, String region) {
+    /** Detecta a performance do dispositivo (RAM + núcleos de CPU) */
+    private void detectDevicePerformance() {
+        // RAM total do dispositivo
+        ActivityManager activityManager = (ActivityManager) mContext.getSystemService(Context.ACTIVITY_SERVICE);
+        ActivityManager.MemoryInfo memoryInfo = new ActivityManager.MemoryInfo();
+        activityManager.getMemoryInfo(memoryInfo);
+        long totalRam = memoryInfo.totalMem; // em bytes
+
+        // Núcleos disponíveis
+        int numberOfCores = Runtime.getRuntime().availableProcessors();
+
+        // Definição de dispositivo High-End
+        // Critério: >= 3 GB de RAM E >= 4 núcleos
+        isHighEndDevice = (totalRam >= 3L * 1024 * 1024 * 1024 && numberOfCores >= 4);
+
+        // Logs para debug
+        Log.d(TAG, "Device performance detected: " + (isHighEndDevice ? "High-End" : "Low-End"));
+        Log.d(TAG, "Total RAM: " + (totalRam / (1024 * 1024)) + " MB");
+        Log.d(TAG, "CPU Cores: " + numberOfCores);
+    }
+
+    private void adjustPerformanceParameters() {
+        long elapsed = System.currentTimeMillis() - startTime;
+        if (elapsed == 0) return;
+
+        double fps = (framesProcessed * 1000.0) / elapsed;
+        boolean newPerfStatus = fps > 15;
+
+        if (newPerfStatus != isHighEndDevice) {
+            isHighEndDevice = newPerfStatus;
+            Log.d(TAG, "Performance auto-adjusted to: " + (isHighEndDevice ? "High-End" : "Low-End") + " (" + fps + " fps)");
+        }
+
+        framesProcessed = 0;
+        startTime = System.currentTimeMillis();
+    }
+
+    private Result decodeBarcodeInternal(Mat frame, String region) {
         try {
             int w = frame.width();
             int h = frame.height();
-            frame = frame.submat(0, h / 4, w / 2 + h / 4, w);
+            Mat cropped = frame.submat(0, h / 4, w / 2 + h / 4, w);
 
-            Bitmap bMap = Bitmap.createBitmap(frame.width(), frame.height(), Bitmap.Config.ARGB_8888);
-            org.opencv.android.Utils.matToBitmap(frame, bMap);
-            //frame.release();
-            int[] intArray = new int[bMap.getWidth()*bMap.getHeight()];
-            //copy pixel data from the Bitmap into the 'intArray' array
+            if (!isHighEndDevice) {
+                Imgproc.resize(cropped, cropped, new Size(cropped.cols()/2, cropped.rows()/2));
+            }
+
+            Bitmap bMap = Bitmap.createBitmap(cropped.width(), cropped.height(), Bitmap.Config.ARGB_8888);
+            org.opencv.android.Utils.matToBitmap(cropped, bMap);
+            cropped.release();
+
+            int[] intArray = new int[bMap.getWidth() * bMap.getHeight()];
             bMap.getPixels(intArray, 0, bMap.getWidth(), 0, 0, bMap.getWidth(), bMap.getHeight());
+            bMap.recycle();
 
-            LuminanceSource source = new RGBLuminanceSource(bMap.getWidth(), bMap.getHeight(),intArray);
-
+            LuminanceSource source = new RGBLuminanceSource(bMap.getWidth(), bMap.getHeight(), intArray);
             BinaryBitmap bBitmap = new BinaryBitmap(new HybridBinarizer(source));
 
             Reader reader = new ITFReader();
             Map<DecodeHintType, Object> hints = new EnumMap<>(DecodeHintType.class);
             hints.put(DecodeHintType.TRY_HARDER, Boolean.TRUE);
-            Result barcode = reader.decode(bBitmap, hints);
-            Log.d("BARCODE", "Barcode: " + barcode.getText());
-            if(!barcode.getText().isEmpty()) {
-                currentBarcode = barcode.getText();
-                numOfBarcodes++;
-                if(region == "northEast") {
-                    rotate = "northEast";
-                } else {
-                    rotate = "southWest";
-                }
-            } else {
-                numOfBarcodes = 0;
-            }
+
+            return reader.decode(bBitmap, hints);
         } catch (Exception e) {
-            currentBarcode = null;
-            numOfBarcodes = 0;
+            return null;
         }
     }
 
-    private void decodeBarcodeWest(Mat frame, String region) {
-        try {
-            int w = frame.width();
-            int h = frame.height();
-            frame = frame.submat(0, h / 4, w / 2 + h / 4, w);
-
-            Bitmap bMap = Bitmap.createBitmap(frame.width(), frame.height(), Bitmap.Config.ARGB_8888);
-            org.opencv.android.Utils.matToBitmap(frame, bMap);
-            int[] intArray = new int[bMap.getWidth()*bMap.getHeight()];
-            //copy pixel data from the Bitmap into the 'intArray' array
-            bMap.getPixels(intArray, 0, bMap.getWidth(), 0, 0, bMap.getWidth(), bMap.getHeight());
-
-            LuminanceSource source = new RGBLuminanceSource(bMap.getWidth(), bMap.getHeight(),intArray);
-
-            BinaryBitmap bBitmap = new BinaryBitmap(new HybridBinarizer(source));
-
-            Reader reader = new ITFReader();
-            Map<DecodeHintType, Object> hints = new EnumMap<>(DecodeHintType.class);
-            hints.put(DecodeHintType.TRY_HARDER, Boolean.TRUE);
-            Result barcode = reader.decode(bBitmap, hints);
-            Log.d("BARCODE", "Barcode: " + barcode.getText());
-            if(!barcode.getText().isEmpty()) {
-                currentBarcodeWest = barcode.getText();
-                numOfBarcodes++;
-                if(region == "northEast") {
-                    rotate = "northEast";
-                } else {
-                    rotate = "southWest";
-                }
+    private void decodeBarcode(Mat frame, String region) {
+        Result result = decodeBarcodeInternal(frame, region);
+        if (result != null && !result.getText().isEmpty()) {
+            if ("northEast".equals(region)) {
+                currentBarcode = result.getText();
+                rotate = "northEast";
             } else {
-                numOfBarcodes = 0;
+                currentBarcodeWest = result.getText();
+                rotate = "southWest";
             }
-        } catch (Exception e) {
-            currentBarcodeWest = null;
+            numOfBarcodes++;
+        } else {
             numOfBarcodes = 0;
         }
     }
 
     private void processPreviewFrame(PreviewFrame previewFrame) {
-        Mat frame = previewFrame.getFrame();
-        boolean focused = mMainActivity.isFocused();
-
-        if (detectRectangleInFrame(frame) && focused) {
-            try {
-                Mat northEast = detectDocumentDoc(frame);
-                decodeBarcode(northEast, "northEast");
-                if(currentBarcode == null) {
-                    Mat southWest = northEast.clone();
-                    Core.flip(southWest, southWest, 1);
-                    Core.flip(southWest, southWest, 0);
-                    decodeBarcodeWest(southWest, "southWest");
-                }
-                //numOfSquares++;
-                double now = (double)(new Date()).getTime() / 1000.0;
-                if (numOfBarcodes == numOfRectangles && now > lastCaptureTime + durationBetweenCaptures && currentBarcode != null || currentBarcodeWest != null) {
-                    lastCaptureTime = now;
-                    numOfBarcodes = 0;
-                    mMainActivity.requestPicture();
-                }
-            } catch (Exception ignored){
-                Log.d("BARCODE", String.valueOf(ignored));
-            }
-        } else {
-            numOfBarcodes = 0;
+        // Inicialização na primeira execução
+        if (startTime == 0) {
+            startTime = System.currentTimeMillis();
+            detectDevicePerformance(); // agora sem parâmetro
         }
 
-        frame.release();
-        mMainActivity.setImageProcessorBusy(false);
+        // Controle de taxa de processamento
+        long currentTime = System.currentTimeMillis();
+        long minInterval = isHighEndDevice ? MIN_INTERVAL_HIGH_END : MIN_INTERVAL_LOW_END;
+
+        if (currentTime - lastProcessingTime < minInterval) {
+            previewFrame.getFrame().release();
+            mMainActivity.setImageProcessorBusy(false);
+            return;
+        }
+        lastProcessingTime = currentTime;
+
+        try {
+            Mat frame = previewFrame.getFrame();
+            if (!mMainActivity.isFocused() || !detectRectangleInFrame(frame)) {
+                stableFramesCount = 0;
+                return;
+            }
+
+            Mat northEast = null;
+            Mat southWest = null;
+            try {
+                northEast = detectDocumentDoc(frame);
+                decodeBarcode(northEast, "northEast");
+
+                if (currentBarcode == null) {
+                    southWest = northEast.clone();
+                    Core.flip(southWest, southWest, 1);
+                    Core.flip(southWest, southWest, 0);
+                    decodeBarcode(southWest, "southWest");
+                }
+
+                // Lógica de captura adaptativa
+                int requiredStableFrames = isHighEndDevice ?
+                        MIN_FRAMES_STABLE_HIGH_END : MIN_FRAMES_STABLE_LOW_END;
+
+                if (currentBarcode != null || currentBarcodeWest != null) {
+                    stableFramesCount++;
+                    if (stableFramesCount >= requiredStableFrames &&
+                            System.currentTimeMillis() / 1000.0 > lastCaptureTime + durationBetweenCaptures) {
+                        lastCaptureTime = System.currentTimeMillis() / 1000.0;
+                        stableFramesCount = 0;
+                        mMainActivity.requestPicture();
+                    }
+                } else {
+                    stableFramesCount = 0;
+                }
+            } finally {
+                if (northEast != null) northEast.release();
+                if (southWest != null) southWest.release();
+            }
+
+            // Verificação periódica de performance
+            if (++framesProcessed >= PERFORMANCE_CHECK_INTERVAL) {
+                adjustPerformanceParameters();
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Error processing frame", e);
+            stableFramesCount = 0;
+        } finally {
+            mMainActivity.setImageProcessorBusy(false);
+        }
     }
 
     private void processPicture(Mat picture) {
@@ -231,8 +287,9 @@ public class ImageProcessor extends Handler {
         mMainActivity.invalidateHUD();
         mMainActivity.saveDocument(doc, currentBarcode != null ? currentBarcode : currentBarcodeWest, rotate);
         doc.release();
-        picture.release();
+        img.release();
         currentBarcode = null;
+        currentBarcodeWest = null;
 
         mMainActivity.setImageProcessorBusy(false);
         mMainActivity.waitSpinnerInvisible();
